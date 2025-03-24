@@ -1,0 +1,39 @@
+---
+title: "Data 608 Story 1"
+author: "Keith DeNivo"
+format: pdf
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+library(dplyr)
+library(RCurl)
+library(tidyr)
+library(tidyverse)
+library(reshape2)
+```
+
+You can add options to executable code like this
+
+```{r}
+
+
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+<https://www.census.gov/data/tables/time-series/demo/popest/2020s-state-total.html>
+
+<https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/42MVDX>
+
+```{r}
+
+```
