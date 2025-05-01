@@ -5,35 +5,308 @@ format: pdf
 editor: visual
 ---
 
-## Quarto
+Given the Dataset on Infrastructure Investment and Jobs Act funding by State
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+we must address the following questions
 
-## Running Code
+## Questions
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+1.  Is the allocation equitable based on the population of each of the States and Territories, or is bias apparent?
+
+2.  Does the allocation favor the political interests of the Biden administration?
+
+## Story start
+
+The main issue is whether the money allocated through the Infrastructure Investment and Jobs Act Funding Act was distributed fairly among the states and was there any bias? This may open up an understanding of how government operates under the political parties and whether they are to be trusted or challenged. If they need to be challenged then democracy must take precedence to elect the officials that will provide the fairness that Americans' deserve.
+
+## Libraries Loaded
 
 ```{r}
-library(dplyr)
+
+library(readxl)
+library(httr)
+library(devtools)
 library(RCurl)
-library(tidyr)
+library(plyr)
+library(dplyr)
 library(tidyverse)
-library(reshape2)
+library(DescTools)
+library(ggpubr)
+library(openintro)
+library(readr)
+library(rvest)
+library(fpp3)
+library(ggplot2)
+library(tsibble)
+library(feasts)
+library(openxlsx)
+library(latex2exp)
+library(seasonal)
+library(seasonalview)
+library(fable)
+library(rio)
+library(urca)
+library(zoo)
+library(lubridate)
+library(writexl)
+library(janitor)
 ```
 
-You can add options to executable code like this
+In order to answer the first question population data was downloaded. It will be used to calculate the revenue spent from the Act on each individual for each state. In order to address the second question there was a comparison of the Biden supporting states and the Trump supporting states. The election results of each state was gathered to determine if the state supported Trump or Biden.
 
-```{r}
+### Sources of the Data
 
-
-```
-
-The `echo: false` option disables the printing of code (only output is displayed).
+#### Population of each state:
 
 <https://www.census.gov/data/tables/time-series/demo/popest/2020s-state-total.html>
 
+US Census Bureau. (n.d.). *State Population Totals and Components of Change: 2020-2024*. Census.gov. https://www.census.gov/data/tables/time-series/demo/popest/2020s-state-total.html
+
+#### General election results:
+
 <https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/42MVDX>
+
+MIT Election Data and Science Lab, 2017, "U.S. President 1976–2020", <https://doi.org/10.7910/DVN/42MVDX>, Harvard Dataverse, V8, UNF:6:F0opd1IRbeYI9QyVfzglUw== \[fileUNF\]
+
+## Data imported into R
+
+### Infrastructure and Jobs Act Dataset
 
 ```{r}
 
+#stored the data sets on Github for download/read
+c <- "https://github.com/division-zero/Data-608/raw/refs/heads/main/Story%201/IIJA%20FUNDING%20AS%20OF%20MARCH%202023.xlsx"
+#read in the raw file
+temp <- tempfile(fileext = ".xlsx")
+#download the file
+GET(c, write_disk(temp))
+
+# Load the file into a dataframe
+funding_df <- read_excel(temp)
+
+# temp file removed
+unlink(temp)
+
+names(funding_df)[1] <- "state"
+
+#fix typo for delaware
+funding_df[9,1] <- 'DELAWARE' 
+
+head(funding_df)
+
 ```
+
+### Population of each state.
+
+Data was imported and cleaned.
+
+```{r}
+c1 <- "https://github.com/division-zero/Data-608/raw/refs/heads/main/Story%201/NST-EST2024-POP.xlsx"
+#read in the raw file
+temp <- tempfile(fileext = ".xlsx")
+#download the file
+GET(c1, write_disk(temp))
+
+# Load the file into a dataframe
+statepop_df <- read_excel(temp)
+
+# temp file removed
+unlink(temp)
+
+head(statepop_df)
+
+statepop_df <- statepop_df |> 
+  row_to_names(row_number = 3)
+names(statepop_df)[1] <- "state"
+
+
+statepop_df <- statepop_df[6:56, ] |> select( 'state', '2020')
+names(statepop_df)[2] <- "population"
+
+#remove the '.' in front of the state names
+statepop_df <- statepop_df %>%
+  mutate(state = gsub("^\\.", "", state))
+
+  statepop_df <- statepop_df |> mutate(`state` = toupper(`state`))
+
+head(statepop_df)
+```
+
+Population of each state put into dataframe
+
+### Election Results
+
+Imported the election results into R cleaned and stored into a data frame
+
+```{r}
+c2 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%201/1976-2020-president.csv")
+#read in the raw file
+genelection_df <- data.frame(read.csv(text = c2 ))
+#put the csv into a dataframe
+head(genelection_df)
+
+#extract Biden and Trump election data for year 2020
+election2020_df <- genelection_df |>  filter(year == 2020)
+head(election2020_df)
+
+#remove blanks in candidate column
+election2020_df <- election2020_df |> 
+  filter(candidate != "")
+
+#if the string under candidate contains "BIDEN" relabel the candidate name to BIDEN. If the Candidate name contains "TRUMP" relabel the candidate name to TRUMP.  this is to avoid any syntax mismatches.
+election_df <- election2020_df |> 
+  mutate(candidate = ifelse(grepl("BIDEN", candidate), "BIDEN", candidate),
+         candidate = ifelse(grepl("TRUMP", candidate), "TRUMP", candidate))
+
+
+#remove columns that are not of interest
+ election2020_df1 <-election_df  |> select('state', 'candidate', 'candidatevotes') 
+ 
+ #select the rows that have Biden or Trump as the candidate
+ election2020_df2 <- election2020_df1 |> filter( candidate %in% c("BIDEN" , "TRUMP"))
+ 
+ #take the votes for each candidate and put them under the candidate name.  the candidate name is now a column.  
+ electionBT_df <- election2020_df2 |> 
+   pivot_wider(names_from = candidate, values_from = candidatevotes)
+ 
+ #if the votes for one candidate are greater than the other, then declare that candidate the winner and store their name under column winner.
+ electionBT_df <- electionBT_df |>  mutate(winner = ifelse(TRUMP > BIDEN, "TRUMP", "BIDEN"))
+head(electionBT_df)
+```
+
+## Merging the data sets.
+
+The data frames were merged by state. The revenue spent from the act for each state was divided by the population of the respective state.
+
+```{r}
+
+merged_df <- funding_df |> 
+  full_join(statepop_df, by = "state") |> 
+  full_join(electionBT_df, by = "state")
+names(merged_df)[2] <- "Total_Billions"
+
+merged_df <- merged_df |> 
+  mutate(per_capita = as.numeric(Total_Billions)*1000000000 / as.numeric(population))
+
+head(merged_df)
+
+
+
+```
+
+## Visualize the Data
+
+At first we can look at how much money was spent on each state.
+
+```{r}
+
+merged_df <- merged_df |> 
+  filter(!is.na(per_capita))
+
+averageT_revenue <- merged_df |> 
+  filter(winner == 'TRUMP') |> 
+  summarize(mean_revenue = mean(Total_Billions, na.rm = TRUE)) |> 
+  pull(mean_revenue)
+
+averageB_revenue <- merged_df |> 
+  filter(winner == 'BIDEN') |> 
+  summarize(mean_revenue = mean(Total_Billions, na.rm = TRUE)) |> 
+  pull(mean_revenue)
+
+merged_df <- merged_df |> 
+  arrange(winner, desc(Total_Billions)) |> 
+  mutate(state = factor(state, levels = unique(state)))
+
+merged_df |> ggplot( aes(x = state, y = Total_Billions, fill = winner)) +
+  geom_col( ) +
+  labs(title = "Revenue by State") +
+  scale_fill_manual(values = c("BIDEN" = "blue", "TRUMP" = "red")) +
+geom_hline(yintercept = averageT_revenue, linetype = "dashed", color = "pink", size = 2)  +
+geom_hline(yintercept = averageB_revenue, linetype = "dashed", color = "skyblue", size = 2) +
+  annotate("text", x = Inf, y = averageT_revenue, label = "Average Trump", hjust = -0.05, vjust = 1, color = "pink") +
+  annotate("text", x = Inf, y = averageB_revenue, label = "Average Biden", hjust = -0.02, vjust = 2, color = "skyblue") +
+   labs(title = "Revenue by State",
+       x = "State",
+       y = "Revenue ($)") +
+  coord_flip() +
+  theme(axis.text.y = element_text(size = 12),
+    axis.title.y = element_text(size = 14),
+    plot.title = element_text(size = 16),
+    axis.text.x = element_text(size = 12),
+    axis.title.x = element_text(size = 14))
+
+```
+
+Money was not spent equally on each state. It has a distribution. some states Received much more money than others. California, Florida, New York, and Ohio were among the states that received the highest amounts. New Hampshire, Delaware, Vermont, and Idaho were among the smallest recipients.
+
+## Looking at the revenue distribution via box and whisker plot
+
+```{r}
+
+ggplot(merged_df, aes(x = winner, y = Total_Billions, color = winner)) +
+  scale_color_manual(values = c("BIDEN" = "blue", "TRUMP" = "red"))+
+  geom_boxplot() +
+  labs(title = "State Revenue by Election Winner",
+       x = "Winner",
+       y = "Revenue") 
+```
+
+Though money was not spent equally on each state. The red states based on mean and median did not receive significantly more money than blue states.
+
+## Infrastructure and Jobs Act Per Capita.
+
+Ideally the money spent per person or capita should be completely evenly distributed. we can visualize the distribution for red and blue states.
+
+```{r}
+
+merged_df <- merged_df |> 
+  filter(!is.na(per_capita))
+
+averageT_per_capita <- merged_df |> 
+  filter(winner == 'TRUMP') |> 
+  summarize(mean_per_capita = mean(per_capita, na.rm = TRUE)) |> 
+  pull(mean_per_capita)
+
+averageB_per_capita <- merged_df |> 
+  filter(winner == 'BIDEN') |> 
+  summarize(mean_per_capita = mean(per_capita, na.rm = TRUE)) |> 
+  pull(mean_per_capita)
+
+merged_df <- merged_df |> 
+  arrange(winner, desc(per_capita)) |> 
+  mutate(state = factor(state, levels = unique(state)))
+
+merged_df |> ggplot( aes(x = state, y = per_capita, fill = winner)) +
+  geom_col( ) +
+  labs(title = "Revenue per Capita by State") +
+  scale_fill_manual(values = c("BIDEN" = "blue", "TRUMP" = "red")) +
+geom_hline(yintercept = averageT_per_capita, linetype = "dashed", color = "pink", size = 2)  +
+geom_hline(yintercept = averageB_per_capita, linetype = "dashed", color = "skyblue", size = 2) +
+  annotate("text", x = Inf, y = averageT_per_capita, label = "Average Trump", hjust = -0.05, vjust = 1, color = "pink") +
+  annotate("text", x = Inf, y = averageB_per_capita, label = "Average Biden", hjust = -0.02, vjust = 2, color = "skyblue") +
+  labs(title = "Revenue per Capita by State",
+       x = "State",
+       y = "Revenue per Capita") +
+  coord_flip() +
+  theme(axis.text.y = element_text(size = 12),
+    axis.title.y = element_text(size = 14),
+    plot.title = element_text(size = 16),
+    axis.text.x = element_text(size = 12),
+    axis.title.x = element_text(size = 14))
+
+```
+
+From the bar chart the money clearly was more evenly distributed among the blue states. The red states had a more extreme discrepancy for the low population states. When looking on average the red states received more money per capita, however the median more accurately reflects how the money was distributed.
+
+```{r}
+ggplot(merged_df, aes(x = winner, y = per_capita, color = winner)) +
+  scale_color_manual(values = c("BIDEN" = "blue", "TRUMP" = "red"))+
+  geom_boxplot() +
+  labs(title = "Revenue per Capita by Election Winner",
+       x = "Winner",
+       y = "Revenue per Capita") 
+```
+
+The revenue per capita appeared to have an even distrubution among the majority of the states. States with low populations appear to have received more funding per person.
+
+The median revenue per capita was very close for the red states and blue states. Despite a democrat president being in power it can be argued that the bias went towards the republican red states rather than the blue states. One way this would benefit politically is if the democrat party would want to increase their influence in the republican majority states. However the differences seem relatively minimal especially when comparing to the median revenue per capita between the red and blue states. How the money is allocated may be based on some other factor rather than political ideology. It does not appear that the Biden administration played "favorites" among the democrat majority states and if anything the opposite occurred.
