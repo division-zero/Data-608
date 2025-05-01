@@ -1,0 +1,29 @@
+---
+title: "Has the FED been able to fulfill the mandate given to it by Congress?"
+author: "Keith DeNivo"
+format: pdf
+editor: visual
+---
+
+## Feds goals
+
+-   Keep Inflation Low
+
+-   Keep Unemployment Low
+
+-   Use interest rates to control the inflation and unemployment
+
+```{r}
+#| echo: false
+
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
