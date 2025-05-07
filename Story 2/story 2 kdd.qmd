@@ -7,7 +7,7 @@ editor: visual
 
 ## Feds goals
 
--   Keep Inflation Low
+-   Keep price stability (low Inflation rate)
 
 -   Keep Unemployment Low
 
@@ -15,15 +15,407 @@ editor: visual
 
 ```{r}
 #| echo: false
+#| include: false
+library(readxl)
+library(httr)
+library(devtools)
+library(RCurl)
+library(plyr)
+library(dplyr)
+library(tidyverse)
+library(DescTools)
+library(ggpubr)
+library(openintro)
+library(readr)
+library(rvest)
+library(fpp3)
+library(ggplot2)
+library(tsibble)
+library(feasts)
+library(openxlsx)
+library(latex2exp)
+library(seasonal)
+library(seasonalview)
+library(fable)
+library(rio)
+library(urca)
+library(zoo)
+library(lubridate)
+library(writexl)
+library(janitor)
 
-1 + 1
 ```
-
-You can add options to executable code like this
 
 ```{r}
 #| echo: false
-2 * 2
+#| include: false
+c1 <- "https://github.com/division-zero/Data-608/raw/refs/heads/main/Story%202/CPI-USeriesReport-20250430212750_4e0f48.xlsx"
+#read in the raw file
+temp <- tempfile(fileext = ".xlsx")
+#download the file
+GET(c1, write_disk(temp))
+
+# Load the file into a dataframe
+CPI_df <- read_excel(temp)
+
+# temp file removed
+unlink(temp)
+
+head(CPI_df)
+
+
+
+c3 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%202/FEDFUNDS.csv")
+#read in the raw file
+fedfunds_df <- data.frame(read.csv(text = c3 ))
+#put the csv into a dataframe
+head(fedfunds_df)
+
+c2 <- "https://github.com/division-zero/Data-608/raw/refs/heads/main/Story%202/Unemployment%20rateSeriesReport-20250430212633_850590.xlsx"
+#read in the raw file
+temp <- tempfile(fileext = ".xlsx")
+#download the file
+GET(c2, write_disk(temp))
+
+# Load the file into a dataframe
+unemploy_df <- read_excel(temp)
+
+# temp file removed
+unlink(temp)
+
+head(unemploy_df)
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+#| echo: false
+#| include: false
+#| 
+#time to clean
+
+CPI_df <- CPI_df |>  slice(-(1:10)) #remove the header rows
+
+unemploy_df <- unemploy_df |>  slice(-(1:10)) #remove the header rows
+head(CPI_df)
+head(unemploy_df)
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+# set column names to be the first row
+colnames(unemploy_df) <- unemploy_df[1, ]
+colnames(CPI_df) <- CPI_df[1, ]
+
+# remove the first row
+unemploy_df <- unemploy_df[-1, ]
+CPI_df <- CPI_df[-1, ]
+```
+
+```{r}
+#| echo: false
+#| include: false
+head(CPI_df)
+head(unemploy_df)
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+#change all the named months to their respective numbered month
+unemploy_df <- unemploy_df |> 
+rename(`1` = Jan, `2` = Feb, `3` = Mar, `4` = Apr, `5` = May, `6` = Jun, `7` = Jul, `8` = Aug, `9` = Sep, `10` = Oct, `11` = Nov, `12` = Dec)
+
+#make a column with the numeric date
+unemploy_df2 <- unemploy_df |> 
+ pivot_longer(cols = -Year, names_to = "month", values_to = "unemployment") |> mutate(date = paste(Year, month, "1", sep = "-")) |> 
+select(date, unemployment)
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#remove the columns with half averages
+CPI_df <- CPI_df[, 1:13]
+#make a column with the numeric date
+CPI_df <- CPI_df |> 
+rename(`1` = Jan, `2` = Feb, `3` = Mar, `4` = Apr, `5` = May, `6` = Jun, `7` = Jul, `8` = Aug, `9` = Sep, `10` = Oct, `11` = Nov, `12` = Dec)
+
+#make a column with the numeric date
+CPI_df2 <- CPI_df |> 
+ pivot_longer(cols = -Year, names_to = "month", values_to = "CPI") |> mutate(date = paste(Year, month, "1", sep = "-")) |> 
+select(date, CPI)
+
+colnames(fedfunds_df) <- c("date","FEDFUNDS")
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#convert the date column into a date data type
+CPI_df3 <- CPI_df2 |> 
+mutate(date = gsub("\\.0", "", date), #remove the ".0" in 1999.0
+date = as.Date(date, format = "%Y-%m-%d"))
+
+#convert the date column into a date data type
+unemploy_df3 <- unemploy_df2 |> 
+mutate(date = gsub("\\.0", "", date),
+date = as.Date(date, format = "%Y-%m-%d"))
+
+#convert the date column into a date data type
+fedfunds_df3 <- fedfunds_df |> 
+ mutate( date = as.Date(date, format = "%Y-%m-%d"))
+
+#join all data files by date for easier reference in plotting
+econ_df <- fedfunds_df3 |> 
+ full_join(CPI_df3, by = "date") |> 
+full_join(unemploy_df3, by = "date")
+econ_df2 <- econ_df |>  drop_na()
+
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+econ_df2 <- econ_df2 %>%
+ mutate(CPI = as.numeric(CPI))
+
+
+econ_df2 <- econ_df2 |> 
+arrange(date) |> mutate(date_numeric=as.numeric(date), CPI_derivative=(CPI-lag(CPI))/(date_numeric-lag(date_numeric))) |> select(-date_numeric)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+#plotting the raw data in merged dataframe
+
+#compute the derivative of CPI to see if that may provide a better insight
+econ_df2 <- econ_df2 |>  mutate(CPI = as.numeric(CPI))
+econ_df2 <- econ_df2 |>  mutate(unemployment = as.numeric(unemployment))
+
+
+fedplot <- econ_df2 |> ggplot(aes(x=date,y=FEDFUNDS))+
+  geom_line()
+fedplot
+
+unemployplot <- econ_df2 |> ggplot(aes(x = date, y = unemployment))+
+  geom_line()
+unemployplot
+
+CPIplot <- econ_df2 |> ggplot(aes(x=date,y=CPI))+
+  geom_line() 
+
+CPIplot
+
+CPIdplot <- econ_df2 |> ggplot(aes(x=date,y=CPI_derivative))+
+  geom_line() 
+
+CPIdplot
+```
+
+## Federal Fund Rate
+
+```{r}
+#| echo: false
+fedplot <- econ_df2 |> ggplot(aes(x=date,y=FEDFUNDS, color = 'red'))+
+  geom_line()+
+  labs(title = 'Federal Fund Rate. 
+We will explore the relationship between itself,
+CPI, and Unemployment')+
+  ylab('Federal Fund Rate')+
+  guides(color = FALSE)+
+  theme_minimal()
+
+fedplot
+
+
+```
+
+## Unemployment %
+
+```{r}
+#| echo: false
+unemployplot <- econ_df2 |> ggplot(aes(x = date, y = unemployment, color = 'orange'))+
+  geom_line() +
+  labs(y = 'Unemployment %', title = 'Umemployment Fluctuation') +
+  guides(color = FALSE)+
+  theme_minimal()
+unemployplot
+
+
+```
+
+## Consumer Price Index
+
+```{r}
+#| echo: false
+
+
+CPIplot <- econ_df2 |> ggplot(aes(x=date,y=CPI))+
+  geom_line(color = 'red') +
+  labs(title = 'Consumer Price Index Keeps Increasing at different rates')+
+  theme_minimal()
+
+CPIplot
+```
+
+```{r}
+#| echo: false
+
+fedemplot <- econ_df2 |> 
+ggplot(aes(x = date)) +
+ geom_line(aes(y = FEDFUNDS, color = "Federal Funds Rate")) +
+ geom_line(aes(y = unemployment, color = "Unemployment%")) +
+ geom_ribbon(aes(ymin = pmin(FEDFUNDS, unemployment), ymax = pmax(FEDFUNDS, unemployment)), alpha = 0.1) +
+ labs(color = "Legend",y="%",title = "Federal Fund Rate decreases when Unemployment % increases. 
+During periods when employment % is decreasing 
+the Federal Fund Rate may increase.") +
+ scale_color_manual(values = c("Federal Funds Rate" = "blue", "Unemployment%" = "orange")) +
+ theme_minimal()
+
+
+fedemplot
+
+
+```
+
+Ideally the area between is minimized near zero %
+
+.
+
+```{r}
+#| echo: false
+#| include: false
+#exploring how the difference between the federal fund rate and unemployment %
+econ_df2 <- econ_df2 |> mutate( fed_difference=(unemployment-FEDFUNDS))
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+diffplot <- econ_df2 |> ggplot(aes(x=date,y=fed_difference))+
+  geom_line() 
+diffplot
+
+#plot basically just looks like the unemployment % plot not very useful
+```
+
+## Federal Fund rate is low when Unemployment is High
+
+```{r}
+#| echo: false
+#exploring the dependence on fed fund rate
+fedunplot <- econ_df2 |> ggplot(aes(x=FEDFUNDS,y=unemployment))+
+  geom_point(color= 'darkgreen') +
+  theme_minimal()+
+  labs(title = 'Umeployment % vs Federal Fund Rate', y = "Unemployment %", x = "Federal Fund Rate")
+fedunplot
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#looking at the derivative of CPI with the federal fund rate
+fedcpiderplot <- econ_df2 |> ggplot(aes(x=date))+
+  geom_line(aes(y=FEDFUNDS))+
+  geom_line(aes(y=CPI_derivative))
+fedcpiderplot
+
+scale_factor = 50
+fedcpiderplot <- econ_df2 |> 
+ ggplot(aes(x = date)) +
+ geom_line(aes(y = FEDFUNDS, color = "FEDFUNDS")) +
+ geom_line(aes(y = CPI_derivative * scale_factor, color = "CPI_derivative")) +
+ scale_y_continuous(
+ name = "FEDFUNDS",
+ sec.axis = sec_axis(~ . / scale_factor, name = "CPI_derivative")) +
+ labs(color = "Legend") +
+scale_color_manual(values = c("FEDFUNDS" = "blue", "CPI_derivative" = "red")) +
+ theme_minimal()
+
+fedcpiderplot
+
+
+```
+
+## CPI and Federal Fund Rate
+
+```{r}
+#| echo: false
+scale_factor = 40
+fedcpiplot <- econ_df2 |> 
+ ggplot(aes(x = date)) +
+  geom_line(aes(y = CPI , color = "CPI")) +
+ geom_line(aes(y = FEDFUNDS * scale_factor, color = "Federal Fund Rate")) +
+  labs(title = 'At first, The Federal Fund Rate does not depend on CPI')+
+ scale_y_continuous(
+ name = "CPI",
+ sec.axis = sec_axis(~ . / scale_factor, name = "Federal Fund Rate")) +
+ labs(color = "Legend") +
+scale_color_manual(values = c("Federal Fund Rate" = "blue", "CPI" = "red")) +
+ theme_minimal()
+
+fedcpiplot
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#looking at the biweekly rate Change in CPI
+days <- 14
+econ_df2 <- econ_df2 |> 
+ mutate(
+ date_numeric = as.numeric(date),
+CPI_14derivative = rollapply(CPI, width = days, FUN = function(x) (x[days] - x[1]) / (date_numeric[days] - date_numeric[1]), by = 1, fill = NA, align = "right")
+ ) |> 
+ select(-date_numeric)
+diff14plot <- econ_df2 |> ggplot(aes(x=date,y=CPI_14derivative))+
+  geom_line() 
+diff14plot
+
+
+```
+
+## CPI change rate and Federal Fund Rate
+
+```{r}
+#| echo: false
+scale_factor = 100
+fedcpi14plot <- econ_df2 |> 
+ ggplot(aes(x = date)) +
+ geom_line(aes(y = FEDFUNDS, color = "Federal Fund Rate")) +
+  labs(y='Federal Fund Rate', title = 'CPI will react to the Federal Fund Rate.
+The federal Fund Rate will increase as a reaction to 
+an increase to the CPI rate')+
+ geom_line(aes(y = CPI_14derivative * scale_factor, color = "Change in CPI")) +
+ scale_y_continuous(
+ name = "Federal Fund Rate",
+ sec.axis = sec_axis(~ . / scale_factor, name = "Change in CPI")) +
+ labs(color = "Legend") +
+scale_color_manual(values = c("Federal Fund Rate" = "blue", "Change in CPI" = "red")) +
+ theme_minimal()
+fedcpi14plot
+```
+
+The increases in the federal fund rate as a reaction to the increasing CPI rate are more apparent after 2015.
+
+The federal fund rate does react to the % unemployment and CPI.
