@@ -1,25 +1,302 @@
 ---
 title: "Do stricter gun laws reduce firearm gun deaths?"
 author: "Keith DeNivo"
-format: beamer
+format: revealjs
 editor: visual
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
-
-## Bullets
-
-When you click the **Render** button a document will be generated that includes:
-
--   Content authored with markdown
--   Output from executable code
-
-## Code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
+```{r}
+#| echo: false
+#| include: false
+library(readxl)
+library(httr)
+library(devtools)
+library(RCurl)
+library(plyr)
+library(dplyr)
+library(tidyverse)
+library(DescTools)
+library(ggpubr)
+library(openintro)
+library(readr)
+library(rvest)
+library(fpp3)
+library(ggplot2)
+library(tsibble)
+library(feasts)
+library(openxlsx)
+library(latex2exp)
+library(seasonal)
+library(seasonalview)
+library(fable)
+library(rio)
+library(urca)
+library(zoo)
+library(lubridate)
+library(writexl)
+library(janitor)
+library(scales)
+library(patchwork)
+library(ggthemes)
+library(ggrepel)
+library(DT)
+library(socviz)
+library(sf)
+library(maps)
+library(geofacet)
+library(statebins)
+library(GGally)
+```
 
 ```{r}
-1 + 1
+#| echo: false
+#| include: false
+
+
+c1 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%203/burglary%20(1).csv")
+#read in the raw file
+burglary_df <- data.frame(read.csv(text = c1 ))
+#put the csv into a dataframe
+
+c2 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%203/firearm_laws.csv")
+#read in the raw file
+laws_df <- data.frame(read.csv(text = c2 ))
+#put the csv into a dataframe
+
+c3 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%203/firearm_mortality2022.csv")
+#read in the raw file
+mortal_df <- data.frame(read.csv(text = c3 ))
+#put the csv into a dataframe
+
+c4 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%203/gun-ownership-by-state.csv")
+#read in the raw file
+own_df <- data.frame(read.csv(text = c4 ))
+#put the csv into a dataframe
+
+c5 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%203/mortality_breakdown.csv")
+#read in the raw file
+mbreak_df <- data.frame(read.csv(text = c5 ))
+#put the csv into a dataframe
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+#convert 2 letter state abbreviations to the full state numaes
+ mortal_df$STATE <- state.name[sapply(mortal_df$STATE, \(x) which(x == state.abb)[1])]
+#add district of columbia
+mortal_df$STATE[9] <- "District of Columbia"
+
+mbreak_df$State <- state.name[sapply(mbreak_df$State, \(x) which(x == state.abb)[1])]
+
+mbreak_df$State[9] <- "District of Columbia"
+
+```
+
+## The Amount of Gun Laws Vary Significantly by State
+
+```{r}
+#| echo: false
+
+
+#graph the states with the least to most gun laws
+laws_df |> as_tibble()  |> ggplot(aes(fill=LAWTOTAL,state=STATE)) + geom_statebins(lbl_size = 6) +
+  scale_fill_gradient(low="white",high="blue") +
+  theme_void(base_size=18) +
+  labs(title="State Laws")
+
+
+
+
+```
+
+## Firearm Mortality Rate over time in New York
+
+```{r}
+#| echo: false
+
+
+#graph the mortality rate change over time of new york
+mortal_df |>  filter(STATE=="New York") |> 
+  ggplot(aes(YEAR, RATE)) + 
+  geom_area(fill = "#56B4E9", alpha = 0.7) +
+  geom_line() + 
+  scale_y_continuous(
+    name = "firearm mortality rate",
+    limits = c(0, 30), expand = c(0, 0),
+   breaks = c(10, 20),
+   labels = c( "10", "20")
+  ) +
+  scale_x_continuous(breaks = c(2010, 2015),
+    labels = c("\'10", "\'15")) +
+ coord_cartesian(clip = "off") +
+ theme_minimal(base_size=20) +
+  theme(
+   axis.line.x = element_blank(),
+    panel.spacing.x = grid::unit(1, "pt"),
+    panel.spacing.y = grid::unit(1, "pt"),
+   panel.grid.major = element_line(color = "gray80"),
+   panel.background = element_rect(fill = "gray90")
+  )+
+  labs(title="New York Firearm Mortality Rate is
+       Mostly Unchanged")
+```
+
+## Firearm Mortality either Increases Over Time or Remains the Same For Most States
+
+```{r}
+#| echo: false
+#| warning: false
+
+
+mortalmod_df <- mortal_df[-9, ]
+
+#graph the mortality rate over time for all states
+mortal_df |> 
+  ggplot(aes(YEAR, RATE)) + 
+  geom_area(fill = "#56B4E9", alpha = 0.7) +
+  geom_line() + 
+  scale_y_continuous(
+    name = "firearm mortality rate",
+    limits = c(0, 30), expand = c(0, 0),
+    breaks = c(10, 20),
+    labels = c( "10", "20")
+  ) +
+  scale_x_continuous(breaks = c(2010, 2015),
+    labels = c("\'10", "\'15")) +
+  coord_cartesian(clip = "off") +
+  facet_geo(~STATE, grid = "us_state_grid1") +
+  theme_minimal(base_size=11) +
+  theme(
+    axis.line.x = element_blank(),
+    panel.spacing.x = grid::unit(1, "pt"),
+    panel.spacing.y = grid::unit(1, "pt"),
+    panel.grid.major = element_line(color = "gray80"),
+    panel.background = element_rect(fill = "gray90")
+  ) 
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+burglary_df <- burglary_df |> 
+mutate(State = str_trim(State, side = "left"))
+head(burglary_df)
+
+burglary_df |> as_tibble()  |> ggplot(aes(fill=Burglary_100k,state=State)) + geom_statebins(lbl_size = 6) +
+  scale_fill_gradient(low="white",high="red") +
+  theme_void(base_size=18) +
+  labs(title="State Burglary")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+#more data cleaning
+
+
+burglary_df <- burglary_df |> 
+ rename(STATE = State)
+
+mbreak_df <- mbreak_df |> 
+ rename(STATE = State)
+
+own_df <- own_df |> 
+ rename(STATE = state)
+
+
+burglary_df <- burglary_df |> 
+ mutate(STATE = trimws(STATE))
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+data_frames <- list(burglary_df |> select(STATE,Burglary_100k), laws_df |> select(STATE, LAWTOTAL), mbreak_df , mortal_df |> filter(YEAR=="2022") |> select(STATE,RATE), own_df |> select(STATE,GunOwnershipPercentage))
+merged_df <- Reduce(function(x, y) merge(x, y, by = "STATE", all = TRUE), data_frames)
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+#remove District of Columbia due to it giving issues.
+merged_df <- merged_df[-9, ]
+
+```
+
+## What Are State Laws Correlated with?
+
+#### Comparison with total gun laws, burglaries per 100k people, suicide rate, homicide rate, % gun ownership, and firearm mortality rate
+
+```{r}
+#| echo: false
+
+ggpairs(merged_df[, 2:7])
+
+
+
+
+```
+
+## Gun Ownership and Mortality Rate
+
+```{r}
+#| echo: false
+
+
+correlation <-  cor(merged_df$GunOwnershipPercentage, merged_df$RATE)
+merged_df |> ggplot(aes(x= GunOwnershipPercentage, y=RATE))+
+  geom_point(size=3)+
+ geom_smooth(method = "lm", se = FALSE) +
+annotate("text", x = Inf, y = Inf, label = paste("Correlation:", round(correlation, 3)),  hjust = 1, vjust = 2.1, size = 5, color = "blue") +
+ labs(title = "The Firearm Mortality Rate 
+  increases with Gun Ownership", x = "% Gun Ownership", y = "Mortality Rate")+
+  theme_minimal(base_size = 20)
+```
+
+## Gun Ownership is Low in States with High Gun Laws
+
+```{r}
+#| echo: false
+
+
+correlation <-  cor(merged_df$LAWTOTAL, merged_df$GunOwnershipPercentage)
+
+merged_df |> ggplot(aes(x= LAWTOTAL, y=GunOwnershipPercentage))+
+  geom_point(size = 3) +
+ geom_smooth(method = "lm", se = FALSE) +
+annotate("text", x = Inf, y = Inf, label = paste("Correlation:", round(correlation, 3)),  hjust = 1.1, vjust = 10, size = 5, color = "blue") +
+ labs(title = "As the Total Gun Laws Increase
+      the % of Gun Ownership Decreases", x = "Total Gun Laws", y = "% Gun Ownership")+
+  theme_minimal(base_size = 20)
+
+```
+
+## Firearm Mortality Rate is Lower in States with High Gun Laws
+
+```{r}
+#| echo: false
+
+
+correlation <-  cor(merged_df$LAWTOTAL, merged_df$RATE)
+merged_df |> ggplot(aes(x= LAWTOTAL, y=RATE))+
+  geom_point(size=3)+
+ geom_smooth(method = "lm", se = FALSE) +
+annotate("text", x = Inf, y = Inf, label = paste("Correlation:", round(correlation, 3)),  hjust = 1.1, vjust = 10, size = 5, color = "blue") +
+ labs(title = "As the number of Gun laws Increase
+      The Mortality Rate Decreases", x = "Total Gun Laws", y = "Mortality Rate")+
+  theme_minimal(base_size = 20)
 ```
