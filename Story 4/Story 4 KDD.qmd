@@ -5,35 +5,467 @@ format: revealjs
 editor: visual
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
-
-## Bullets
-
-When you click the **Render** button a document will be generated that includes:
-
--   Content authored with markdown
--   Output from executable code
-
-## Code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
+#| echo: false
+#| include: false
+
 library(tidyverse)
 library(geojsonsf)
 library(ggplot2)
+library(sf)
+library(ggokabeito)
+library(knitr)
+library(RCurl)
+library(kableExtra)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#c1 <- getURL("https://github.com/division-zero/Data-608/raw/refs/heads/main/Story%204/neighbourhoods.geojson")
+
+
+
 
 ```
 
 ```{r}
+#| echo: false
+#| include: false
 
+c1 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%204/nyc_airbnb_listings%20(1).csv")
+#read in the raw file
+bnb_df <- data.frame(read.csv(text = c1 ))
+#put the csv into a dataframe
+
+head(bnb_df)
+```
+
+```{r}
+#| echo: false
+#| include: false
 
 nyc_geo <- geojson_sf(
-"/home/georgehagstrom/work/Teaching/DATA608/DataStory4/neighbourhoods.geojson")
+"C:/Users/keith/OneDrive - City University of New York/CUNY SPS MS DATA SCIENCE/Data 608/data 608 assignments/Data-608/Story 4/neighbourhoods.geojson")
+
+
+```
+
+## The Boroughs of New York City
+
+```{r}
+#| echo: false
+nyc_geo |> ggplot(aes(fill= neighbourhood_group)) +
+geom_sf() +
+guides(fill = guide_none())+
+  scale_fill_okabe_ito()
+
+
+```
+
+## Price in Each Borough
+
+```{r}
+#| echo: false
+
+
+ggplot(bnb_df, aes(x = borough, y = revenue)) +
+geom_violin(fill = "skyblue", color = "black") +
+  scale_y_continuous(limits = c(0, 500)) +
+labs(title = "price by Borough
+     Distribution is Widest in Manhattan",
+x = "Borough",
+y = "Revenue") +
+theme_minimal()+
+  coord_flip()
+
+
+
+```
+
+## Revenue in Each Borough
+
+```{r}
+#| echo: false
+
+
+ggplot(bnb_df, aes(x = borough, y = revenue)) +
+geom_boxplot(, color = "black") +
+scale_y_continuous(limits = c(0, 500)) +
+labs(title = "Revenue by Borough
+     Manhattan Generates the most Revenue",
+x = "Borough",
+y = "Revenue") +
+theme_minimal()
+```
+
+```{r}
+#| echo: false
+#| include: false
+
 nyc_geo |> ggplot(aes(fill= neighbourhood)) +
 geom_sf() +
 guides(fill = guide_none())
+```
 
+```{r}
+#| echo: false
+#| include: false
+
+cor_df <- bnb_df |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+strong_corrs <- cor_df |> 
+  filter(abs(Correlation) > 0.5, Var1 != Var2) |> 
+rowwise() |> 
+mutate(pair = paste(sort(c(Var1, Var2)), collapse = "_")) |> 
+distinct(pair, .keep_all = TRUE) |> 
+select(-pair)
+
+revenue_cor <- cor_df |> filter(Var1=="revenue")
+
+unique(bnb_df$neighbourhood_group)
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+mancor_df <- bnb_df |> filter(neighbourhood_group=="Manhattan") |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+manrevenue_cor <- mancor_df |> filter(Var1=="revenue")
+manprice <- mancor_df |> filter(Var1=="price")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+brookcor_df <- bnb_df |> filter(neighbourhood_group=="Brooklyn") |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+brookrevenue_cor <- brookcor_df |> filter(Var1=="revenue")
+brookprice <- brookcor_df |> filter(Var1=="price")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+queencor_df <- bnb_df |> filter(neighbourhood_group=="Queens") |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+Queenrevenue_cor <- queencor_df |> filter(Var1=="revenue")
+Queenprice <- queencor_df |> filter(Var1=="price")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+Bronxcor_df <- bnb_df |> filter(neighbourhood_group=="Bronx") |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+Bronxrevenue_cor <- Bronxcor_df |> filter(Var1=="revenue")
+Bronxprice <- Bronxcor_df |> filter(Var1=="price")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+sicor_df <- bnb_df |> filter(neighbourhood_group=="Staten Island") |> 
+select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+sirevenue_cor <- sicor_df |> filter(Var1=="revenue")
+siprice <- sicor_df |> filter(Var1=="price")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+revenue_neighborhood_df <- bnb_df |> 
+group_by(neighborhood) |> 
+summarize(median_revenue = median(revenue, na.rm = TRUE)) |> 
+ungroup()
+
+print(revenue_neighborhood_df)
+
+borough_revenue_df <- bnb_df |> 
+group_by(borough) |> 
+summarize(median_revenue = median(revenue, na.rm = TRUE)) |> 
+ungroup()
+
+print(borough_revenue_df)
+
+
+
+top10_n <- revenue_neighborhood_df |> 
+arrange(desc(median_revenue)) |> 
+head(10)
+top10_n
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+revenue_neighborhood_df <- revenue_neighborhood_df |> 
+ rename(neighbourhood = neighborhood)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+nyc_geo_revenue <- nyc_geo |> 
+left_join(revenue_neighborhood_df, by = "neighbourhood")
+
+```
+
+## Neighborhoods with Most Revenue
+
+```{r}
+#| echo: false
+
+
+nyc_geo_revenue |> ggplot() +
+geom_sf(aes(fill= median_revenue), color = "white") +
+  scale_fill_gradient(
+    name= "Median Revenue",
+    low = "white", high= "darkgreen",
+    na.value= "grey90"
+  )+
+labs(title = "NYC Neighborhoods by Median Revenue") +
+ theme_minimal() 
+
+
+
+```
+
+## Neighborhood List
+
+```{r}
+#| echo: false
+
+
+revenue_neighborhood_df |> 
+arrange(desc(median_revenue)) |> slice(1:20) |>  ggplot(aes(x = reorder(neighbourhood, median_revenue), y=median_revenue, fill= median_revenue))+
+   scale_y_continuous(
+ name = "Median Revenue"
+ )+
+  geom_col(aes(fill= median_revenue), color = "white")+
+  scale_fill_gradient(
+    name= "Median Revenue",
+    low = "#c1f2bc", high= "darkgreen",
+    na.value= "grey90"
+  )+
+  coord_flip()+
+ labs(x="neighborhood",title="Top 20 neighborhoods by Revenue")+
+  theme_minimal()
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+ggplot(bnb_df, aes(x = borough, y = revenue)) +
+geom_violin(fill = "skyblue", color = "black") +
+  scale_y_continuous(limits = c(0, 500)) +
+labs(title = "price by Borough",
+x = "Borough",
+y = "Revenue") +
+theme_minimal()#+
+ # coord_flip()
+
+ggplot(bnb_df, aes(x = borough, y = revenue)) +
+geom_boxplot(, color = "black") +
+scale_y_continuous(limits = c(0, 500)) +
+labs(title = "Revenue by Borough",
+x = "Borough",
+y = "Revenue") +
+theme_minimal()
+  
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+cccor_df <-  bnb_df |> filter(neighborhood==c("Civic Center")) |> select(where(is.numeric)) |> 
+cor(use = "complete.obs") |> 
+as.data.frame() |> 
+rownames_to_column("Var1") |> 
+pivot_longer(-Var1, names_to = "Var2", values_to = "Correlation")
+
+ccrevenue_cor <- cccor_df |> filter(Var1=="revenue")
+ccprice <- cccor_df |> filter(Var1=="price")
+```
+
+## What Factors Influence Revenue in Civic Center?
+
+```{r}
+#| echo: false
+
+
+top15_cc <- ccrevenue_cor |> 
+arrange(desc(Correlation)) |> 
+head(15)
+
+
+kable(top15_cc, caption = "Top 15 Correlated Variables with Revenue") |> 
+ kable_styling(font_size = 10)
+
+
+```
+
+## What Can we modify to Improve Revenue
+
+What Lessons can we learn from Civic Center?
+
+```{r}
+#| echo: false
+
+
+#cc_df <- bnb_df |> filter(neighborhood==c("Civic Center", "NoHo"))
+
+
+cc_df <- bnb_df |> filter(neighborhood==c("Civic Center"))
+
+cc_df |> ggplot(aes(x= beds, y = revenue))+
+  geom_point(size=3)+
+  scale_fill_okabe_ito()+
+  geom_smooth(method = "lm", se = FALSE)+
+    labs(title="Increase the Number of Beds")+
+  theme_minimal(base_size = 20)
+
+#bnb_df |> filter(borough=="Manhattan") |> ggplot(aes(x= beds, y = revenue))+
+#  geom_point()+
+ # geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+#cc_df <- bnb_df |> filter(neighborhood==c("Civic Center"))
+
+cc_df |> ggplot(aes(x= bedrooms, y = revenue))+
+  geom_jitter(size=3)+
+  scale_fill_okabe_ito()+
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal(base_size=20)
+```
+
+## Work on Increasing Review Score Rating
+
+```{r}
+#| echo: false
+
+
+cc_df |> ggplot(aes(x= review_scores_rating, y = revenue))+
+  geom_point(size=3)+
+  scale_fill_okabe_ito()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title="Review Score")+
+  theme_minimal(base_size = 20)
+```
+
+## Keep Your Description Accurate
+
+```{r}
+#| echo: false
+
+
+cc_df |> ggplot(aes(x= review_scores_accuracy, y = revenue))+
+  geom_point(size=3)+
+  scale_fill_okabe_ito()+
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal(base_size = 20)
+```
+
+## Keep the Air BNB clean
+
+```{r}
+#| echo: false
+
+
+cc_df |> ggplot(aes(x= review_scores_cleanliness, y = revenue))+
+  geom_point(size=3)+
+  scale_fill_okabe_ito()+
+  labs(title="Cleanliness")+
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal(base_size = 20)
+```
+
+## Make Sure it is Believed to Be a Good Deal
+
+```{r}
+#| echo: false
+
+
+cc_df |> ggplot(aes(x= review_scores_value, y = revenue))+
+  geom_point(size=3)+
+  scale_fill_okabe_ito()+
+  labs(title="Good Value")+
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal(base_size = 20)
+```
+
+## If Construction is Possible
+
+```{r}
+#| echo: false
+
+cc_df |> ggplot(aes(x= bedrooms, y = revenue))+
+  geom_jitter(size=3)+
+  scale_fill_okabe_ito()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title="Increase the Number of Bedrooms")+
+  theme_minimal(base_size = 20)
 ```
