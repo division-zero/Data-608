@@ -1,0 +1,194 @@
+---
+title: "Story 5 KDD"
+author: "Keith DeNivo"
+format: revealjs
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
+
+## Bullets
+
+When you click the **Render** button a document will be generated that includes:
+
+-   Content authored with markdown
+-   Output from executable code
+
+## Code
+
+When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| echo: false
+#| include: false
+
+library(tidyverse)
+library(ggplot2)
+library(ggokabeito)
+library(knitr)
+library(RCurl)
+library(kableExtra)
+library(readr)
+library(lubridate)
+library(ggrepel)
+library(DAAG)
+library(FactoMineR)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+c1 <- getURL("https://raw.githubusercontent.com/division-zero/Data-608/refs/heads/main/Story%205/train%20(1).csv")
+#read in the raw file
+train_df <- data.frame(read.csv(text = c1 ))
+#put the csv into a dataframe
+
+head(train_df)
+```
+
+```{r}
+
+numeric_cols <- sapply(train_df, is.numeric)
+train_df[numeric_cols] <- lapply(train_df[numeric_cols], function(x) {
+ x[is.na(x)] <- median(x, na.rm = TRUE)
+ x
+})
+
+```
+
+```{r}
+train <- read.csv(text = c1)
+train2 <- read_csv(c1)
+
+train_df <- train_df %>% select(-Alley)
+
+
+train_df2 <- na.omit(train_df)
+
+
+
+train_fit =  train_df |>
+ select(where(is.numeric)) |>
+ prcomp(scale = TRUE)
+
+ #train_fit <-  train |>
+ #select(where(is.numeric)) |>
+ #scale() |>
+ #prcomp(retx = TRUE)
+ #train_fit
+```
+
+```{r}
+summary(train_fit)
+```
+
+```{r}
+train_fit |> augment(train_df)
+```
+
+```{r}
+train_mca =  train_df |>
+ select(!where(is.numeric)) |>
+MCA( ncp = 10, graph = TRUE)
+
+train_mca |> summary()
+
+```
+
+```{r}
+
+
+train_mca$var$contrib[, 1]
+
+# Sort to find the most important variables
+sort(train_mca$var$contrib[, 1], decreasing = TRUE)
+
+
+```
+
+```{r}
+sort(train_mca$var$contrib[, 2], decreasing = TRUE)
+
+```
+
+```{r}
+
+sort(train_mca$var$contrib[, 3], decreasing = TRUE)
+```
+
+```{r}
+
+head(train_mca$var$coord)
+
+```
+
+```{r}
+
+head(train_mca$var$contrib)
+
+sort(train_mca$var$contrib[, 1], decreasing = TRUE)
+
+contrib_df <- as.data.frame(train_mca$var$contrib)
+contrib_df$category <- rownames(contrib_df)
+
+
+contrib_df$variable <- sub("_.*", "", contrib_df$category)
+sort(contrib_df$variable[, 1], decreasing = TRUE)
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 1`))  |> 
+arrange(desc(total_contrib))
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 2`))  |> 
+arrange(desc(total_contrib))
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 3`))  |> 
+arrange(desc(total_contrib))
+
+```
+
+```{r}
+train_fit |>
+ augment(train_df, color = Foundation) %>%
+ggplot(aes(.fittedPC1, .fittedPC2)) +
+ geom_point(size = 1.5) +
+ scale_color_manual(
+ values = c(m = "#D55E00", f = "#0072B2")
+ ) +
+ theme_minimal(base_size=16) +
+ labs(title="PCA Coordinates for Australian Athletes",
+ x = "PC 1", y= "PC 2",subtitle = "Color shows sex")
+```
+
+```{r}
+#| fig-width: 7
+#| fig-height: 7
+
+arrow_style <- arrow(
+  angle = 20, length = grid::unit(8, "pt"),
+  ends = "first", type = "closed"
+)
+train_fit %>%
+  tidy(matrix = "rotation")  |> 
+  pivot_wider(
+    names_from = "PC", values_from = "value",
+    names_prefix = "PC"
+  )  |> 
+  ggplot(aes(PC1, PC2)) +
+  geom_segment(
+    xend = 0, yend = 0,
+    arrow = arrow_style
+  ) +
+  geom_text_repel(aes(label = column), hjust = 1,vjust=1) +
+  xlim(-0.5, 0.5) + ylim(-0.25, 0.75) + 
+  coord_fixed() +
+  theme_minimal(base_size =16)
+```
