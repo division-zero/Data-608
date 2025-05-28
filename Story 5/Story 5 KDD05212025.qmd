@@ -1,5 +1,5 @@
 ---
-title: "Story 5 KDD"
+title: "Data Story 5: Quantifying Factors that Control Housing Sales Prices"
 author: "Keith DeNivo"
 format: revealjs
 editor: visual
@@ -20,6 +20,15 @@ library(lubridate)
 library(ggrepel)
 library(DAAG)
 library(FactoMineR)
+library(broom)
+library(tidymodels)
+library(marginaleffects)
+library(mlr3verse)
+library(skimr)
+library(patchwork)
+library(factoextra)
+
+
 ```
 
 ## Quantifying Factors that Control Housing Sales Prices
@@ -54,6 +63,8 @@ train_df[numeric_cols] <- lapply(train_df[numeric_cols], function(x) {
 
 ## Principal Component Analysis On Ames Dataset Numeric Values
 
+### Dataset can be dimensionally reduced PC1 and PC2 graphed below
+
 ```{r}
 #| echo: false
 #| include: false
@@ -82,6 +93,9 @@ train_pca =  train_df |>
 ```
 
 ```{r}
+#| echo: false
+#| include: false
+
 
 summary(train_pca)
 ```
@@ -89,132 +103,36 @@ summary(train_pca)
 ```{r}
 #| echo: false
 #| include: false
+
+
 train_pca |> augment(train_df)
 ```
 
 ```{r}
-
-train_mca =  train_df |>
- select(!where(is.numeric)) |>
-MCA( ncp = 5, graph = TRUE)
-
-train_mca |> summary()
-
-```
-
-```{r}
 #| echo: false
-#| include: false
-
-#train_mca$var$contrib[, 1]
 
 
-sort(train_mca$var$contrib[, 1], decreasing = TRUE)
-
-
-```
-
-```{r}
-#| echo: false
-#| include: false
-
-
-sort(train_mca$var$contrib[, 2], decreasing = TRUE)
-
-```
-
-```{r}
-#| echo: false
-#| include: false
-
-
-sort(train_mca$var$contrib[, 3], decreasing = TRUE)
-```
-
-```{r}
-#| echo: false
-#| include: false
-
-
-head(train_mca$var$coord)
-
-```
-
-```{r}
-
-head(train_mca$var$contrib)
-
-sort(train_mca$var$contrib[, 1], decreasing = TRUE)
-
-contrib_df <- as.data.frame(train_mca$var$contrib)
-contrib_df$category <- rownames(contrib_df)
-
-
-contrib_df$variable <- sub("_.*", "", contrib_df$category)
-sort(contrib_df$variable[, 1], decreasing = TRUE)
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 1`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 2`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 3`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 4`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 5`))  |> 
-arrange(desc(total_contrib))
-
-```
-
-```{r}
-
-plot(train_mca$eig[, 1],
-type = "b",
-xlab = "Dimension",
-ylab = "Eigenvalue",
-main = "Scree Plot of MCA Dimensions")
-
-```
-
-```{r}
-
-
-
-```
-
-```{r}
-train_fit |>
+train_pca |>
  augment(train_df) |> 
 ggplot(aes(.fittedPC1, .fittedPC2,color = Foundation)) +
  geom_point(size = 1.5) +
  theme_minimal(base_size=16) +
  labs(title="PCA Coordinates",
- x = "PC 1", y= "PC 2",subtitle = "Color")
+ x = "PC 1", y= "PC 2",subtitle = "Example")
 ```
 
+## What Variables Are the Principal Components?{.smaller}
+
 ```{r}
-#| fig-width: 7
-#| fig-height: 7
+#| echo: false
+#| fig-width: 5
+#| fig-height: 5
 
 arrow_style <- arrow(
   angle = 20, length = grid::unit(8, "pt"),
   ends = "first", type = "closed"
 )
-train_fit %>%
+train_pca |> 
   tidy(matrix = "rotation")  |> 
   pivot_wider(
     names_from = "PC", values_from = "value",
@@ -235,7 +153,12 @@ train_fit %>%
 
 ```
 
+## How Many Principle Components should we use?
+
+### \~5
+
 ```{r}
+#| echo: false
 
 
 tibble(var_explained = (train_pca$sdev)^2/80) |> ggplot(aes(x=1:38,y=var_explained)) + geom_point() +
@@ -243,7 +166,11 @@ tibble(var_explained = (train_pca$sdev)^2/80) |> ggplot(aes(x=1:38,y=var_explain
   theme_minimal(base_size = 16)
 ```
 
+## Variables within Principal Components 1-5 {.smaller}
+
 ```{r}
+#| echo: false
+
 
 loadings <- as.data.frame(train_pca$rotation)
 
@@ -263,41 +190,81 @@ contribpca_df <- contribpca_df |>
 
 head(contribpca_df)
 
-contribpca_df  |> 
- group_by(variable )  |> 
-   summarise(total_contrib = sum(`PC1`))  |> 
-arrange(desc(total_contrib))
 
-contribpca_df  |> 
- group_by(variable )  |> 
-   summarise(total_contrib = sum(`PC2`))  |> 
-arrange(desc(total_contrib))
-
-contribpca_df  |> 
- group_by(variable )  |> 
-   summarise(total_contrib = sum(`PC3`))  |> 
-arrange(desc(total_contrib))
-
-contribpca_df  |> 
- group_by(variable )  |> 
-   summarise(total_contrib = sum(`PC4`))  |> 
-arrange(desc(total_contrib))
-
-contribpca_df  |> 
- group_by(variable )  |> 
-   summarise(total_contrib = sum(`PC5`))  |> 
-arrange(desc(total_contrib))
 
 ```
 
 ```{r}
 
+```
+
+
+
+
+```{r}
+#| echo: false
+#| include: false
+
+#Dim 1
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC1`))  |> 
+arrange(desc(total_contrib)) |> 
+  slice_head(n=10)
+
+#Dim 2
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC2`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+
+#Dim 3
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC3`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+
+#Dim 4
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC4`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+
+#Dim 5
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC5`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+```
+
+## Multi Component Analysis on Categorical Variables {.smaller} 
+
+```{r}
+#| echo: false
+
+
+#Multi Component analysis on categorical variables
 train_mca =  train_df |>
  select(!where(is.numeric)) |>
-MCA( ncp = 5, graph = TRUE)
+MCA( ncp = 5, graph = FALSE)
+
+
+
+fviz_mca_var(train_mca,
+axes = c(1, 2),
+repel = TRUE, select.var = list(contrib = 20))
+
+```
+
+```{r}
+#| echo: false
+#| include: false
 
 train_mca |> summary()
-
 ```
 
 ```{r}
@@ -339,7 +306,9 @@ head(train_mca$var$coord)
 ```
 
 ```{r}
-
+#| echo: false
+#| include: false
+#compute the contribution of variable to the dimension component
 head(train_mca$var$contrib)
 
 sort(train_mca$var$contrib[, 1], decreasing = TRUE)
@@ -349,46 +318,71 @@ contrib_df$category <- rownames(contrib_df)
 
 
 contrib_df$variable <- sub("_.*", "", contrib_df$category)
-sort(contrib_df$variable[, 1], decreasing = TRUE)
+sort(contrib_df$variable, decreasing = TRUE)
 
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 1`))  |> 
-arrange(desc(total_contrib))
 
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 2`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 3`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 4`))  |> 
-arrange(desc(total_contrib))
-
-contrib_df  |> 
- group_by(variable)  |> 
-   summarise(total_contrib = sum(`Dim 5`))  |> 
-arrange(desc(total_contrib))
 
 ```
 
+## How many MCA components to use?
+
+### again \~5
+
 ```{r}
+#| echo: false
+
 
 plot(train_mca$eig[, 1],
 type = "b",
 xlab = "Dimension",
 ylab = "Eigenvalue",
-main = "Scree Plot of MCA Dimensions")
-
+main = "Scree Plot of Ames MCA Dimensions")
 ```
 
-##Building a model
+## Which categorical variables to use? {.smaller}
+
+```{r}
+#| echo: false
+
+
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 1`))  |> 
+arrange(desc(total_contrib)) |> 
+slice_head(n = 10)
+
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 2`))  |> 
+arrange(desc(total_contrib))|> 
+slice_head(n = 10)
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 3`))  |> 
+arrange(desc(total_contrib))|> 
+slice_head(n = 10)
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 4`))  |> 
+arrange(desc(total_contrib))|> 
+slice_head(n = 10)
+
+contrib_df  |> 
+ group_by(variable)  |> 
+   summarise(total_contrib = sum(`Dim 5`))  |> 
+arrange(desc(total_contrib))|> 
+slice_head(n = 10)
+```
+
+
+
+## Building a Model
+
+### Using variables from the top 5 PCA and MCA dimensions
 
 ```{r}
 mod <-  lm(SalePrice ~ Foundation+ ExterQual+ BsmtQual+KitchenQual+Exterior1st+Exterior2nd+ GarageFinish+ HeatingQC+BsmtFinType1+MasVnrType+ BsmtCond+ BsmtFinType2+ BsmtExposure+ GarageCond+ GarageFinish+ GarageQual+ GarageType+ KitchenQual+ ExterQual+ RoofStyle+ LandSlope+ RoofMatl+ OverallQual+ GrLivArea+GarageCars+GarageArea+TotalBsmtSF+FullBath+X1stFlrSF+TotRmsAbvGrd+ YearBuilt+ X2ndFlrSF+ BsmtFinSF1+ BsmtFullBath+ HalfBath+KitchenAbvGr+GarageYrBlt+ LotArea+ LotFrontage+ YearRemodAdd+ MSSubClass+ Fireplaces+ EnclosedPorch+ BsmtUnfSF+ WoodDeckSF+OverallCond+ BsmtHalfBath+ScreenPorch, data= train_df)
@@ -396,6 +390,10 @@ mod <-  lm(SalePrice ~ Foundation+ ExterQual+ BsmtQual+KitchenQual+Exterior1st+E
 ```
 
 ```{r}
+#| echo: false
+#| include: false
+
+
 mod |> summary()
 mod |> str()
 mod |> tidy(conf.int = TRUE)
@@ -411,7 +409,19 @@ slice_max(order_by = estimate, n = 20) |> ggplot(mapping = aes(x = reorder(term,
  labs(title="Display of Coordinates")
 ```
 
+## Components of the Model sorted by p values
+
 ```{r}
+#| echo: false
+#| include: false
+
+mod |> tidy(conf.int = TRUE) |> slice_head(n=20)
+
+```
+
+```{r}
+#| echo: false
+
 
 mod_summary <- summary(mod)
 
@@ -429,34 +439,39 @@ head(coef_df_sorted, 20)
 
 ```
 
+## Model Sales Price Prediction. Overall Quality and How New?
+
 ```{r}
+#| echo: false
+
 mod |> plot_predictions(condition = c("OverallQual","YearBuilt")) +
  theme_minimal(base_size = 16) +
- labs(title = "Newer is Better",
+ labs(title = "Better Quality, Newer is Better",
  x="Overall Quality",
  y="Sales Price")
 ```
 
+## A Better Basement Makes a Difference
+
 ```{r}
+#| echo: false
+#| include: false
+
 mod |> plot_predictions(condition = c("OverallQual","BsmtQual")) +
  theme_minimal(base_size = 16) +
- labs(title = "Excellent Basement",
+ labs(title = "Excellent Basement Quality",
  x="Overall Quality",
  y="Sales Price")
 ```
 
 ```{r}
-plot_predictions(
-    mod,conf_level = .99,
-    condition = list(
-        "num_amenities",
-        "host_is_superhost"), points = .5, rug = TRUE) +
-  theme_minimal(base_size=16) +
-  labs(title = "Impact of Amenities on Revenue",
-       subtitle = "Predictions made for 2 Bedroom Airbnbs in NYC", x = "Number of Amenities",y="Revenue ($ per night)")
+
 ```
 
 ```{r}
+#| echo: false
+
+
 plot_predictions(
     mod,conf_level = .99,
     condition = list(
@@ -468,14 +483,37 @@ plot_predictions(
 ```
 
 ```{r}
+
+```
+
+## Size of Basement Matters too
+
+```{r}
+mod |> plot_predictions(condition = c("TotalBsmtSF","YearBuilt")) +
+ theme_minimal(base_size = 16) +
+ labs(title = "Bigger Basement Better Price",
+ x="Basement Square Feet",
+ y="Sales Price")
+```
+
+## So Does the Kitchen
+
+```{r}
+#| echo: false
+#| include: false
+
+
 mod |> plot_predictions(condition = c("YearBuilt","KitchenQual")) +
  theme_minimal(base_size = 16) +
- labs(title = "Newer is Better",
+ labs(title = "Kitchen Quality and Year",
  x="Year Built",
  y="Sales Price")
 ```
 
 ```{r}
+#| echo: false
+
+
 plot_predictions(
     mod,conf_level = .99,
     condition = list(
@@ -486,7 +524,10 @@ plot_predictions(
        subtitle = "", x = "Year Built",y="Sales Price")
 ```
 
+## Lot Size and Exterior Quality
+
 ```{r}
+#| echo: false
 
 
 #ExterQual
@@ -505,6 +546,9 @@ plot_predictions(
 ```
 
 ```{r}
+#| echo: false
+#| include: false
+
 plot_predictions(
     mod,conf_level = .99,
     condition = list(
@@ -518,10 +562,4 @@ plot_predictions(
 
 ```
 
-```{r}
-mod |> plot_predictions(condition = c("TotalBsmtSF","YearBuilt")) +
- theme_minimal(base_size = 16) +
- labs(title = "Bigger Basement Better Price",
- x="Basement Square Feet",
- y="Sales Price")
-```
+
