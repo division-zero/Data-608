@@ -1,0 +1,502 @@
+---
+title: "Story 6 KDD"
+author: "Keith DeNivo"
+format: revealjs
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| include: false
+
+library(tidyverse)
+library(ggplot2)
+library(ggokabeito)
+library(knitr)
+library(RCurl)
+library(kableExtra)
+library(readr)
+library(lubridate)
+library(ggrepel)
+library(DAAG)
+library(FactoMineR)
+library(broom)
+library(tidymodels)
+library(marginaleffects)
+library(mlr3verse)
+library(skimr)
+library(patchwork)
+library(factoextra)
+library(cluster)
+library(dbscan)
+library(e1071)
+library(fpc)
+library(GGally)
+library(kernlab)
+library(mclust)
+library(mlbench)
+library(scatterpie)
+library(seriation)
+library(here)
+library(ggdendro)
+library(cowplot)
+library(colorspace)
+library(kableExtra)
+library(ggforce)
+library(ggiraph)
+library(sf)
+library(maps)
+library(usmapdata)
+library(usmap)
+library(ggokabeito)
+library(cowplot)
+library(wordcloud)
+library(tm)
+
+
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+userfeat_df <- data.frame(read.csv("C:/Users/keith/OneDrive - City University of New York/CUNY SPS MS DATA SCIENCE/Data 608/data 608 assignments/Story 6/Story - 6  Customer Segmentation at Instacart attached files May 20, 2025 914 PM/DataStory6_files/user_features.csv"))
+
+depart_df <- data.frame(read.csv("C:/Users/keith/OneDrive - City University of New York/CUNY SPS MS DATA SCIENCE/Data 608/data 608 assignments/Story 6/Story - 6  Customer Segmentation at Instacart attached files May 20, 2025 914 PM/DataStory6_files/departments.csv"))
+
+prod_df <- data.frame(read.csv("C:/Users/keith/OneDrive - City University of New York/CUNY SPS MS DATA SCIENCE/Data 608/data 608 assignments/Story 6/Story - 6  Customer Segmentation at Instacart attached files May 20, 2025 914 PM/DataStory6_files/products.csv"))
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+
+    
+    
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+user <- as.data.frame( userfeat_df |> scale()) |> select(-user_id)
+
+# pca_fit <-  user |> 
+#   select(where(is.numeric))  |>  
+#   prcomp(scale = TRUE)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+# pca_fit |> 
+#  augment(userfeat_df)  |> 
+#   ggplot(aes(.fittedPC1, .fittedPC2)) + 
+#   geom_point(size = 1.5) +
+#   theme_minimal(base_size=16) +
+#   labs(title="",
+#        x = "PC 1", y= "PC 2",subtitle = "")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+# set.seed(35)
+# 
+# wine_clusters = pca_fit|> 
+#     augment(userfeat_df) |> 
+#   select(.fittedPC1:.fittedPC13) |> 
+#   kmeans(centers=3) |> augment(userfeat_df)
+# 
+# pca_fit |> augment(wine_clusters) |> 
+#   ggplot(aes(.fittedPC1, .fittedPC2,color=.cluster)) + 
+#   geom_point(size = 1.5) +
+#   theme_minimal(base_size=16) +
+#   labs(title="",
+#        x = "PC 1", y= "PC 2",subtitle = "")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+# set.seed(35)
+# 
+# wine_clusters = pca_fit|> 
+#     augment(userfeat_df) |> 
+#   select(.fittedPC1:.fittedPC13) |> 
+#   kmeans(centers=3) |> augment(userfeat_df)
+# 
+# pca_fit |> augment(wine_clusters) |> 
+#   ggplot(aes(.fittedPC1, .fittedPC2,color=.cluster)) + 
+#   geom_point(size = 1.5) +
+#   theme_minimal(base_size=16) +
+#   labs(title="",
+#        x = "PC 1", y= "PC 2",subtitle = "")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+percent_df <- userfeat_df |> 
+ mutate(row_total = rowSums(across((last_col()-6):last_col()))) |> 
+ mutate(across(2:(ncol(userfeat_df) - 7), ~ .x / row_total, .names = "norm_{.col}")) |> 
+select(starts_with("norm_"),user_id, Saturday, Sunday, Monday, Tuesday, Wednesday, Thursday, Friday)
+
+head(userfeat_df)
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+set.seed(35)
+pca_fit2 <-  percent_df |> select(-user_id) |> 
+  select(where(is.numeric))  |>  
+  prcomp(scale = TRUE)
+
+ kmodel <- pca_fit2|> 
+    augment(percent_df) |> 
+  select(.fittedPC1:.fittedPC13) |> 
+  kmeans(centers=3,nstart = 10) 
+
+user_clusters = kmodel |> augment(percent_df)
+
+
+
+
+
+```
+
+## How Do We Categorize over 200,000 Users of Instacart?
+
+### By their purchases of various products offered by Instacart
+
+```{r}
+#| echo: false
+
+
+
+words <- colnames(userfeat_df)
+
+words <- gsub("\\.", " ", colnames(userfeat_df))
+
+
+wordcloud(words = words)
+         
+
+
+```
+
+## Break down the purchase History by Principle Component Analysis
+
+```{r}
+#| echo: false
+
+
+pca_fit2 |> augment(user_clusters) |> 
+  ggplot(aes(.fittedPC1, .fittedPC2)) + 
+  geom_point(size = 1.5) +
+  theme_minimal(base_size=16) +
+  labs(title="",
+       x = "PC 1", y= "PC 2",subtitle = "")
+```
+
+## What are the main principle Components?
+
+```{r}
+#| echo: false
+
+arrow_style <- arrow(
+  angle = 20, length = grid::unit(8, "pt"),
+  ends = "first", type = "closed"
+)
+pca_fit2 |> 
+  tidy(matrix = "rotation")  |> 
+  pivot_wider(
+    names_from = "PC", values_from = "value",
+    names_prefix = "PC"
+  )  |> 
+  ggplot(aes(PC1, PC2)) +
+  geom_segment(
+    xend = 0, yend = 0,
+    arrow = arrow_style
+  ) +
+  geom_text_repel(aes(label = column), hjust = 1,vjust=1) +
+  xlim(-0.25, 0.5) + ylim(-0.25, 0.3) + 
+  coord_fixed() +
+  theme_minimal(base_size =16)+
+  labs(title = "Contributing Purchases")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+loadings <- as.data.frame(pca_fit2$rotation)
+
+
+squared_loadings <- loadings^2
+
+
+contribpca_df <- squared_loadings[, 1:5]
+contribpca_df$total_contrib <- rowSums(contribpca_df)
+
+
+contribpca_df <- contribpca_df[order(-contribpca_df$total_contrib), ]
+
+
+contribpca_df <- contribpca_df |> 
+ rownames_to_column(var = "variable")
+
+head(contribpca_df)
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+#Dim 1
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC1`))  |> 
+arrange(desc(total_contrib)) |> 
+  slice_head(n=10)
+
+#Dim 2
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC2`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+
+#Dim 3
+contribpca_df  |> 
+ group_by(variable )  |> 
+   summarise(total_contrib = sum(`PC3`))  |> 
+arrange(desc(total_contrib))|> 
+  slice_head(n=10)
+
+```
+
+## Which of the Purchase History Variables Separate Instacart Users?
+
+```{r}
+#| echo: false
+
+#PC1 > PC2 for # Purchases on Days of the Week.
+
+#PC2 > PC1  Goods Purchases
+
+top_pc1 <- contribpca_df |> 
+  group_by(variable) |> 
+  summarise(contrib = sum(PC1)) |> 
+  slice_max(contrib, n = 15) |> 
+  mutate(PC = "PC1")
+
+top_pc2 <- contribpca_df |> 
+  group_by(variable) |> 
+  summarise(contrib = sum(PC2)) |> 
+  slice_max(contrib, n = 15) |> 
+  mutate(PC = "PC2")
+
+
+
+
+top_combined <- bind_rows(top_pc1, top_pc2,)
+
+
+ggplot(top_combined, aes(x = reorder(variable, contrib), y = contrib, fill = PC)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Top Purchase History Variables for 
+    PC1, PC2", subtitle = "PC1 > PC2 for # Purchases on Days of the Week
+PC2 > PC1  Goods Purchases",
+    x = "Product/Day",
+    y = "Contribution"
+  )
+
+```
+
+## Clustering Users via K-means  
+
+```{r}
+#| echo: false
+
+
+kvec = seq(2:6)
+
+wcss = map_dbl(kvec,.f = function(k) {
+    kmeans(percent_df, centers = k, nstart = 5)$tot.withinss
+})
+
+elbow_plot = tibble(clusters = kvec, wcss = wcss) |> unnest()
+
+elbow_plot |> ggplot(aes(kvec, wcss)) + 
+  geom_line() +
+  geom_vline(xintercept = 3, color = "red", linetype = 2) +
+  theme_minimal(base_size = 16) +
+  scale_x_continuous(breaks=c(2,4,6,8,10)) +
+  labs(title = "Elbow Plot",
+       subtitle = "3 Clusters is optimal",
+       y = "Within Cluster Sum of Squares",
+       x = "Number of Clusters")
+```
+
+## Visualizing the Clusters
+
+```{r}
+#| echo: false
+
+
+pca_fit2 |> augment(user_clusters) |> 
+  ggplot(aes(.fittedPC1, .fittedPC2,color=.cluster)) + 
+  geom_point(size = 1.5) +
+  theme_minimal(base_size=16) +
+  labs(title="3 Cluster of users",
+       x = "PC 1", y= "PC 2",subtitle = "")
+```
+
+```{r}
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+ 
+
+  
+
+
+
+percent_df2 = percent_df |> select(-user_id)
+
+
+
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+
+centers_mod <- kmodel$centers %*% t(pca_fit2$rotation[, 1:13])
+centers_mod <- sweep(centers_mod, 2, pca_fit2$scale, "*")
+centers_mod <- sweep(centers_mod, 2, pca_fit2$center, "+")
+
+
+colnames(centers_mod) <- colnames(percent_df2)
+
+centers_df <- as_tibble(centers_mod) |>
+  mutate(center = factor(1:3))
+
+
+
+
+```
+
+## How Do the Clusters of Users Differ?
+
+```{r}
+#| echo: false
+
+#Cluster 2 purchases the most often.
+
+centers_df |> pivot_longer(cols = Saturday:Friday,names_to = "type") |> ggplot(aes(x=type,y=value)) + 
+  geom_col(aes(fill = center)) +
+  scale_fill_discrete(guide = "none") +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~center,nrow=3) +
+  theme_minimal(base_size = 12) +
+  labs(title = "Clusters of Users Distinguished by Days", subtitle = "Cluster 2 purchases the most often.
+Cluster 1 prefers Friday and Saturday Purchases
+Cluster 3 purchases evenly throughout the week",
+       y= "Scaled Values",
+       x="Days")
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+
+```
+
+```{r}
+#| echo: false
+#| include: false
+
+```
+
+## Users Prefer Fresh Fruits and Vegetables
+
+```{r}
+#| echo: false
+
+
+
+#norm_fresh.vegetables , norm_paper.goods, norm_cleaning.products, norm_packaged.vegetables.fruits, norm_body.lotions.soap, norm_canned.jarred.vegetables, norm_oral.hygiene, norm_spices.seasonings, norm_fresh.vegetables, norm_dry.pasta, norm_dish.detergents, norm_packaged.produce
+
+
+centers_df |> pivot_longer(cols = c(norm_fresh.vegetables , norm_paper.goods, norm_cleaning.products, norm_packaged.vegetables.fruits, norm_body.lotions.soap, norm_canned.jarred.vegetables, norm_oral.hygiene, norm_spices.seasonings, norm_dry.pasta, norm_dish.detergents, norm_packaged.produce, norm_fresh.herbs, norm_fresh.fruits, norm_laundry),names_to = "type") |> ggplot(aes(x=type,y=value)) + 
+  geom_col(aes(fill=center)) +
+  scale_fill_discrete(guide = "none") +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~center,nrow=3) +
+  theme_minimal(base_size = 10)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  
+    labs(title = "Goods the different users purchase",
+       y= "Scaled Values",
+       x="Items")
+```
+
+## What about other Items?
+
+```{r}
+#| echo: false
+
+
+centers_df |> pivot_longer(cols = c( norm_paper.goods, norm_cleaning.products, norm_packaged.vegetables.fruits, norm_body.lotions.soap, norm_canned.jarred.vegetables, norm_oral.hygiene, norm_spices.seasonings, norm_dry.pasta, norm_dish.detergents, norm_packaged.produce, norm_fresh.herbs, norm_laundry),names_to = "type")  |> ggplot(aes(x=type,y=value)) + 
+  geom_col(aes(fill=center)) +
+  scale_fill_discrete(guide = "none") +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~center,nrow=3) +
+  theme_minimal(base_size = 10)+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  
+    labs(title = "",subtitle = "cluster 3 focuses more on hygiene, paper, and cleaning products than other clusters
+cluster 1 prefers packaged produce and generally avoids non food items
+cluster 2 is a mix of cluster 3 and cluster 1",
+       y= "Scaled Values",
+       x="Items")
+```
